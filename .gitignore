@@ -1,0 +1,70 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+venv/
+env/
+ENV/
+.venv
+
+# FastAPI / Backend
+.env
+.env.local
+.env.production
+*.db
+*.sqlite
+*.log
+instance/
+
+# Alembic
+alembic.ini
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+*.cover
+.hypothesis/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# GCP
+gcp-credentials.json
+*.pem
+service-account-key.json
+
+# Local uploads (before Cloud Storage)
+uploads/
+media/
+
+# Logs
+logs/
+*.log
+
+# Temporary files
+tmp/
+temp/

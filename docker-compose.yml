@@ -1,0 +1,52 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:15-alpine
+    container_name: naad_bailgada_db
+    environment:
+      POSTGRES_DB: naad_bailgada
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: dev_password_change_in_production
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U admin -d naad_bailgada"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: naad_bailgada_backend
+    environment:
+      DATABASE_URL: postgresql://admin:dev_password_change_in_production@db:5432/naad_bailgada
+      JWT_SECRET_KEY: dev_secret_key_change_in_production_minimum_32_chars
+      ENVIRONMENT: development
+      CLOUD_STORAGE_BUCKET: local-storage
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app
+      - ./uploads:/app/uploads
+    depends_on:
+      db:
+        condition: service_healthy
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+  adminer:
+    image: adminer:latest
+    container_name: naad_bailgada_adminer
+    ports:
+      - "8081:8080"
+    depends_on:
+      - db
+    environment:
+      ADMINER_DEFAULT_SERVER: db
+
+volumes:
+  postgres_data:
