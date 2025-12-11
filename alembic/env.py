@@ -11,9 +11,8 @@ from app.db.base import Base
 
 # Import all models so Alembic can detect them
 from app.models import (
-    District, Taluka, Tahsil, Village,
     Owner, Bull, Race, RaceResult,
-    Leaderboard, AdminUser
+    AdminUser, User
 )
 
 # this is the Alembic Config object, which provides
