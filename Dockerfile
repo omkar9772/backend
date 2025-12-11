@@ -35,12 +35,11 @@ RUN chmod +x /app/*.py || true
 # Update PATH to include user-installed packages
 ENV PATH=/root/.local/bin:$PATH
 
-# Expose port
-EXPOSE 8000
+# Expose port (Cloud Run uses PORT environment variable)
+EXPOSE 8080
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD python -c "import requests; requests.get('http://localhost:8000/health')" || exit 1
+# Set default PORT for Cloud Run
+ENV PORT=8080
 
-# Run the application
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Run the application using PORT environment variable
+CMD uvicorn app.main:app --host 0.0.0.0 --port $PORT
