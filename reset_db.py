@@ -10,11 +10,9 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from app.db.base import Base, engine
 from app.models.admin import AdminUser
-from app.models.region import District, Taluka, Tahsil, Village
 from app.models.bull import Bull
 from app.models.owner import Owner
 from app.models.race import Race, RaceResult
-from app.models.leaderboard import Leaderboard
 
 
 def reset_database():

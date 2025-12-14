@@ -11,9 +11,10 @@ from sqlalchemy.orm import Session
 from app.core.dependencies import get_current_active_admin
 from app.db.base import get_db
 from app.models.admin import AdminUser
-from app.models.race import Race, RaceResult
+from app.models.race import Race, RaceDay, RaceResult
 from app.schemas.race import (
     RaceCreate, RaceUpdate, RaceResponse,
+    RaceDayCreate, RaceDayUpdate, RaceDayResponse,
     RaceResultCreate, RaceResultResponse
 )
 
@@ -75,13 +76,13 @@ async def list_races(
         query = query.filter(Race.status == status_filter)
 
     if from_date:
-        query = query.filter(Race.race_date >= from_date)
+        query = query.filter(Race.start_date >= from_date)
 
     if to_date:
-        query = query.filter(Race.race_date <= to_date)
+        query = query.filter(Race.end_date <= to_date)
 
     total = query.count()
-    races = query.order_by(Race.race_date.desc()).offset(skip).limit(limit).all()
+    races = query.order_by(Race.start_date.desc()).offset(skip).limit(limit).all()
 
     return {
         "data": races,
@@ -152,26 +153,17 @@ async def delete_race(
 
 
 # ============================================================================
-# RACE RESULTS
+# RACE DAYS
 # ============================================================================
 
-@router.post("/{race_id}/results", response_model=List[RaceResultResponse], status_code=status.HTTP_201_CREATED)
-async def add_race_results(
+@router.post("/{race_id}/days", response_model=RaceDayResponse, status_code=status.HTTP_201_CREATED)
+async def create_race_day(
     race_id: UUID,
-    results: List[RaceResultCreate],
+    race_day: RaceDayCreate,
     db: Session = Depends(get_db),
     current_user: AdminUser = Depends(get_current_active_admin)
 ):
-    """
-    Add race results (batch entry)
-
-    Accepts a list of results for the race.
-    Validates that:
-    - Race exists
-    - No duplicate bulls
-    - No duplicate positions
-    - All bulls exist
-    """
+    """Create a new race day for a race"""
     # Verify race exists
     race = db.query(Race).filter(Race.id == race_id).first()
     if not race:
@@ -180,15 +172,175 @@ async def add_race_results(
             detail="Race not found"
         )
 
-    # Validate no duplicates in request
-    bull_ids = [r.bull_id for r in results]
-    positions = [r.position for r in results]
-
-    if len(bull_ids) != len(set(bull_ids)):
+    # Verify race_date is within race date range
+    if race_day.race_date < race.start_date or race_day.race_date > race.end_date:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Duplicate bulls in results"
+            detail=f"Race date must be between {race.start_date} and {race.end_date}"
         )
+
+    # Check if day_number already exists for this race
+    existing_day = db.query(RaceDay).filter(
+        RaceDay.race_id == race_id,
+        RaceDay.day_number == race_day.day_number
+    ).first()
+    if existing_day:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Day number {race_day.day_number} already exists for this race"
+        )
+
+    db_race_day = RaceDay(**race_day.model_dump())
+    db.add(db_race_day)
+    db.commit()
+    db.refresh(db_race_day)
+    return db_race_day
+
+
+@router.get("/{race_id}/days")
+async def list_race_days(
+    race_id: UUID,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
+    db: Session = Depends(get_db),
+    current_user: AdminUser = Depends(get_current_active_admin)
+):
+    """List all race days for a specific race"""
+    # Verify race exists
+    race = db.query(Race).filter(Race.id == race_id).first()
+    if not race:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Race not found"
+        )
+
+    query = db.query(RaceDay).filter(RaceDay.race_id == race_id)
+    total = query.count()
+    race_days = query.order_by(RaceDay.day_number).offset(skip).limit(limit).all()
+
+    return {
+        "data": race_days,
+        "total": total,
+        "skip": skip,
+        "limit": limit
+    }
+
+
+@router.get("/days/{race_day_id}", response_model=RaceDayResponse)
+async def get_race_day(
+    race_day_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: AdminUser = Depends(get_current_active_admin)
+):
+    """Get a race day by ID"""
+    race_day = db.query(RaceDay).filter(RaceDay.id == race_day_id).first()
+    if not race_day:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Race day not found"
+        )
+    return race_day
+
+
+@router.put("/days/{race_day_id}", response_model=RaceDayResponse)
+async def update_race_day(
+    race_day_id: UUID,
+    race_day_update: RaceDayUpdate,
+    db: Session = Depends(get_db),
+    current_user: AdminUser = Depends(get_current_active_admin)
+):
+    """Update a race day"""
+    race_day = db.query(RaceDay).filter(RaceDay.id == race_day_id).first()
+    if not race_day:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Race day not found"
+        )
+
+    # Get the parent race for validation
+    race = db.query(Race).filter(Race.id == race_day.race_id).first()
+
+    # Update fields
+    update_data = race_day_update.model_dump(exclude_unset=True)
+
+    # Validate race_date if being updated
+    if "race_date" in update_data:
+        new_date = update_data["race_date"]
+        if new_date < race.start_date or new_date > race.end_date:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Race date must be between {race.start_date} and {race.end_date}"
+            )
+
+    # Validate day_number if being updated
+    if "day_number" in update_data:
+        existing_day = db.query(RaceDay).filter(
+            RaceDay.race_id == race_day.race_id,
+            RaceDay.day_number == update_data["day_number"],
+            RaceDay.id != race_day_id
+        ).first()
+        if existing_day:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Day number {update_data['day_number']} already exists for this race"
+            )
+
+    for field, value in update_data.items():
+        setattr(race_day, field, value)
+
+    db.commit()
+    db.refresh(race_day)
+    return race_day
+
+
+@router.delete("/days/{race_day_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_race_day(
+    race_day_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: AdminUser = Depends(get_current_active_admin)
+):
+    """Delete a race day"""
+    race_day = db.query(RaceDay).filter(RaceDay.id == race_day_id).first()
+    if not race_day:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Race day not found"
+        )
+
+    db.delete(race_day)
+    db.commit()
+    return None
+
+
+# ============================================================================
+# RACE RESULTS
+# ============================================================================
+
+@router.post("/days/{race_day_id}/results", response_model=List[RaceResultResponse], status_code=status.HTTP_201_CREATED)
+async def add_race_results(
+    race_day_id: UUID,
+    results: List[RaceResultCreate],
+    db: Session = Depends(get_db),
+    current_user: AdminUser = Depends(get_current_active_admin)
+):
+    """
+    Add race results (batch entry)
+
+    Accepts a list of results for the race day.
+    Validates that:
+    - Race day exists
+    - No duplicate positions
+    """
+    # Verify race day exists
+    race_day = db.query(RaceDay).filter(RaceDay.id == race_day_id).first()
+    if not race_day:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Race day not found"
+        )
+
+    # Validate no duplicate positions
+    positions = [r.position for r in results]
 
     if len(positions) != len(set(positions)):
         raise HTTPException(
@@ -196,20 +348,20 @@ async def add_race_results(
             detail="Duplicate positions in results"
         )
 
-    # Clear existing results for this race
-    db.query(RaceResult).filter(RaceResult.race_id == race_id).delete()
+    # Clear existing results for this race day
+    db.query(RaceResult).filter(RaceResult.race_day_id == race_day_id).delete()
 
     # Create new results
     db_results = []
     for result in results:
-        db_result = RaceResult(race_id=race_id, **result.model_dump())
+        db_result = RaceResult(**result.model_dump())
         db.add(db_result)
         db_results.append(db_result)
 
-    # Update race total participants and status
-    race.total_participants = len(results)
-    if race.status == "scheduled":
-        race.status = "completed"
+    # Update race day total participants and status
+    race_day.total_participants = len(results)
+    if race_day.status == "scheduled":
+        race_day.status = "completed"
 
     db.commit()
 
@@ -220,16 +372,16 @@ async def add_race_results(
     return db_results
 
 
-@router.get("/{race_id}/results")
+@router.get("/days/{race_day_id}/results")
 async def get_race_results(
-    race_id: UUID,
+    race_day_id: UUID,
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=200),
     search: Optional[str] = Query(None),
     db: Session = Depends(get_db)
 ):
     """
-    Get all results for a race with pagination and search
+    Get all results for a race day with pagination and search
 
     Each result represents one team with 2 owners and optionally 2 bulls.
     Returns enriched data with bull names and owner names.
@@ -241,8 +393,8 @@ async def get_race_results(
     from app.models.bull import Bull
     from app.models.owner import Owner
 
-    # Get all results for this race
-    query = db.query(RaceResult).filter(RaceResult.race_id == race_id)
+    # Get all results for this race day
+    query = db.query(RaceResult).filter(RaceResult.race_day_id == race_day_id)
 
     # For search, we'll filter after enrichment since we need to search in related tables
     # So first get all results, then filter
@@ -322,6 +474,30 @@ async def get_race_results(
         "skip": skip,
         "limit": limit
     }
+
+
+@router.put("/results/{result_id}", response_model=RaceResultResponse)
+async def update_race_result(
+    result_id: UUID,
+    result_data: RaceResultCreate,
+    db: Session = Depends(get_db),
+    current_user: AdminUser = Depends(get_current_active_admin)
+):
+    """Update a race result"""
+    result = db.query(RaceResult).filter(RaceResult.id == result_id).first()
+    if not result:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Result not found"
+        )
+
+    # Update fields
+    for field, value in result_data.model_dump().items():
+        setattr(result, field, value)
+
+    db.commit()
+    db.refresh(result)
+    return result
 
 
 @router.delete("/results/{result_id}", status_code=status.HTTP_204_NO_CONTENT)

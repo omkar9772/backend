@@ -1,6 +1,6 @@
 # Naad Bailgada - Digital Platform for Bullock Cart Racing
 
-A comprehensive digital platform to manage, track, and celebrate Maharashtra's traditional Bailgada Sharyat (bullock cart races). This system provides race management, real-time leaderboards, and a premium mobile experience for fans and participants.
+A comprehensive digital platform to manage, track, and celebrate Maharashtra's traditional Bailgada Sharyat (bullock cart races). This system provides race management and a premium mobile experience for fans and participants.
 
 ---
 
@@ -11,12 +11,8 @@ A comprehensive digital platform to manage, track, and celebrate Maharashtra's t
 **Key Features**:
 - Bull and owner registration
 - Race management and result tracking
-- Monthly Top 10 leaderboards by region
-- Regional hierarchy (District → Taluka → Tahsil → Village)
 - Premium mobile app for end users
 - Simple web-based admin panel
-
-**Ranking Logic**: Bulls ranked by number of 1st place wins per month
 
 ---
 
@@ -94,7 +90,6 @@ naad_bailgada/
 │   └── IMPLEMENTATION_ROADMAP.md
 │
 ├── scripts/                   # Utility scripts
-│   ├── seed_data.py          # Sample data generator
 │   ├── deploy.sh             # Deployment script
 │   └── backup_db.sh          # Database backup
 │
@@ -140,9 +135,6 @@ cp .env.example .env
 
 # Run database migrations
 alembic upgrade head
-
-# Seed sample data (optional)
-python scripts/seed_data.py
 
 # Start development server
 uvicorn app.main:app --reload --port 8000
@@ -254,7 +246,6 @@ Full API contract available in: `docs/API_CONTRACT.md`
 ### Key Endpoints
 
 **Public (Mobile App)**:
-- `GET /api/v1/leaderboards` - Get Top 10 bulls by region
 - `GET /api/v1/bulls/{id}` - Get bull details
 - `GET /api/v1/races/{id}` - Get race results
 
@@ -271,12 +262,10 @@ Full API contract available in: `docs/API_CONTRACT.md`
 Complete schema in: `docs/database_schema.sql`
 
 **Core Tables**:
-- `districts`, `talukas`, `tahsils`, `villages` - Regional hierarchy
 - `bulls` - Bull registry
 - `owners` - Owner information
 - `races` - Race events
 - `race_results` - Race results with timing
-- `leaderboards` - Materialized monthly Top 10
 
 ---
 
@@ -315,7 +304,7 @@ See `docs/IMPLEMENTATION_ROADMAP.md` for detailed development phases.
 **Phase 1**: Database + Backend API (Weeks 1-2)
 **Phase 2**: Admin Panel (Weeks 3-4)
 **Phase 3**: Mobile App MVP (Weeks 5-6)
-**Phase 4**: Leaderboards + GCP Deployment (Weeks 7-8)
+**Phase 4**: GCP Deployment (Weeks 7-8)
 
 ---
 
