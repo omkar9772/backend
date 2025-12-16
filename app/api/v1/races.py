@@ -320,16 +320,20 @@ async def delete_race_day(
 async def add_race_results(
     race_day_id: UUID,
     results: List[RaceResultCreate],
+    replace_all: bool = Query(False, description="If true, replace all existing results. If false, append new results."),
     db: Session = Depends(get_db),
     current_user: AdminUser = Depends(get_current_active_admin)
 ):
     """
-    Add race results (batch entry)
+    Add race results (batch entry or individual)
 
     Accepts a list of results for the race day.
     Validates that:
     - Race day exists
-    - No duplicate positions
+    - No duplicate positions (across all results)
+
+    By default, appends new results to existing ones.
+    Set replace_all=true to clear existing results first.
     """
     # Verify race day exists
     race_day = db.query(RaceDay).filter(RaceDay.id == race_day_id).first()
@@ -339,17 +343,32 @@ async def add_race_results(
             detail="Race day not found"
         )
 
-    # Validate no duplicate positions
-    positions = [r.position for r in results]
+    # Get existing results if not replacing
+    existing_results = []
+    if not replace_all:
+        existing_results = db.query(RaceResult).filter(RaceResult.race_day_id == race_day_id).all()
 
-    if len(positions) != len(set(positions)):
+    # Validate no duplicate positions (check against both new and existing)
+    new_positions = [r.position for r in results]
+    existing_positions = [r.position for r in existing_results]
+
+    if len(new_positions) != len(set(new_positions)):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Duplicate positions in results"
+            detail="Duplicate positions in new results"
         )
 
-    # Clear existing results for this race day
-    db.query(RaceResult).filter(RaceResult.race_day_id == race_day_id).delete()
+    # Check for position conflicts with existing results
+    position_conflicts = set(new_positions) & set(existing_positions)
+    if position_conflicts:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Position(s) {sorted(position_conflicts)} already exist for this race day"
+        )
+
+    # Clear existing results only if replace_all is true
+    if replace_all:
+        db.query(RaceResult).filter(RaceResult.race_day_id == race_day_id).delete()
 
     # Create new results
     db_results = []
@@ -358,10 +377,15 @@ async def add_race_results(
         db.add(db_result)
         db_results.append(db_result)
 
-    # Update race day total participants and status
-    race_day.total_participants = len(results)
-    if race_day.status == "scheduled":
-        race_day.status = "completed"
+    db.commit()
+
+    # Update race day total participants count
+    total_count = db.query(RaceResult).filter(RaceResult.race_day_id == race_day_id).count()
+    race_day.total_participants = total_count
+
+    # Update status if adding first results
+    if total_count > 0 and race_day.status == "scheduled":
+        race_day.status = "in_progress"
 
     db.commit()
 
@@ -405,6 +429,7 @@ async def get_race_results(
     for result in all_results:
         team_data = {
             'result_id': str(result.id),
+            'race_day_id': str(result.race_day_id),
             'position': result.position,
             'time_milliseconds': result.time_milliseconds,
             'is_disqualified': result.is_disqualified,
@@ -506,7 +531,7 @@ async def delete_race_result(
     db: Session = Depends(get_db),
     current_user: AdminUser = Depends(get_current_active_admin)
 ):
-    """Delete a race result"""
+    """Delete a race result and update participant count"""
     result = db.query(RaceResult).filter(RaceResult.id == result_id).first()
     if not result:
         raise HTTPException(
@@ -514,6 +539,15 @@ async def delete_race_result(
             detail="Result not found"
         )
 
+    race_day_id = result.race_day_id
     db.delete(result)
     db.commit()
+
+    # Update race day total participants count
+    race_day = db.query(RaceDay).filter(RaceDay.id == race_day_id).first()
+    if race_day:
+        total_count = db.query(RaceResult).filter(RaceResult.race_day_id == race_day_id).count()
+        race_day.total_participants = total_count
+        db.commit()
+
     return None

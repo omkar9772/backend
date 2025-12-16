@@ -58,10 +58,6 @@ class Settings(BaseSettings):
     # Rate Limiting
     RATE_LIMIT_PER_MINUTE: int = 100
 
-    # Initial Admin User
-    INITIAL_ADMIN_USERNAME: str = "admin"
-    INITIAL_ADMIN_EMAIL: str = "admin@naadbailgada.com"
-    INITIAL_ADMIN_PASSWORD: str = "change_me_in_production"
 
     class Config:
         env_file = ".env"

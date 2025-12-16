@@ -40,40 +40,31 @@ async def get_dashboard_stats(
     first_day_of_month = date(today.year, today.month, 1)
 
     races_this_month = db.query(func.count(Race.id)).filter(
-        Race.race_date >= first_day_of_month,
-        Race.race_date <= today
+        Race.start_date >= first_day_of_month,
+        Race.start_date <= today
     ).scalar()
 
     # Upcoming races (next 30 days)
     upcoming_races_count = db.query(func.count(Race.id)).filter(
-        Race.race_date > today,
-        Race.race_date <= today + timedelta(days=30),
+        Race.start_date > today,
+        Race.start_date <= today + timedelta(days=30),
         Race.status == "scheduled"
     ).scalar()
 
     # Get upcoming races
     upcoming_races = db.query(Race).filter(
-        Race.race_date > today,
+        Race.start_date > today,
         Race.status == "scheduled"
-    ).order_by(Race.race_date).limit(5).all()
+    ).order_by(Race.start_date).limit(5).all()
 
     # Recent races
     recent_races = db.query(Race).filter(
         Race.status == "completed"
-    ).order_by(Race.race_date.desc()).limit(5).all()
+    ).order_by(Race.start_date.desc()).limit(5).all()
 
     # Bulls with most wins (top 5)
-    top_bulls_subquery = db.query(
-        RaceResult.bull_id,
-        func.count(RaceResult.id).label('total_wins')
-    ).filter(
-        RaceResult.position == 1,
-        RaceResult.is_disqualified == False
-    ).group_by(RaceResult.bull_id).order_by(func.count(RaceResult.id).desc()).limit(5).subquery()
-
-    top_bulls = db.query(Bull).join(
-        top_bulls_subquery, Bull.id == top_bulls_subquery.c.bull_id
-    ).all()
+    # TODO: Refactor for team structure (bull1_id, bull2_id)
+    top_bulls = []
 
     return {
         "total_stats": {
@@ -89,7 +80,7 @@ async def get_dashboard_stats(
             {
                 "id": str(race.id),
                 "name": race.name,
-                "date": race.race_date.isoformat(),
+                "date": race.start_date.isoformat(),
                 "address": race.address
             }
             for race in upcoming_races
@@ -98,18 +89,11 @@ async def get_dashboard_stats(
             {
                 "id": str(race.id),
                 "name": race.name,
-                "date": race.race_date.isoformat(),
+                "date": race.start_date.isoformat(),
                 "participants": race.total_participants,
                 "address": race.address
             }
             for race in recent_races
         ],
-        "top_bulls": [
-            {
-                "id": str(bull.id),
-                "name": bull.name,
-                "owner_id": str(bull.owner_id)
-            }
-            for bull in top_bulls
-        ]
+        "top_bulls": []
     }

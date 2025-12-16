@@ -20,8 +20,9 @@ services:
 
   backend:
     build:
-      context: ./backend
+      context: .
       dockerfile: Dockerfile
+    image: naad_bailgada-backend
     container_name: naad_bailgada_backend
     environment:
       DATABASE_URL: postgresql://admin:dev_password_change_in_production@db:5432/naad_bailgada
@@ -31,7 +32,7 @@ services:
     ports:
       - "8000:8000"
     volumes:
-      - ./backend:/app
+      - .:/app
       - ./uploads:/app/uploads
     depends_on:
       db:
