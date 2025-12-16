@@ -139,7 +139,7 @@ async def delete_race(
     db: Session = Depends(get_db),
     current_user: AdminUser = Depends(get_current_active_admin)
 ):
-    """Cancel a race"""
+    """Delete a race"""
     race = db.query(Race).filter(Race.id == race_id).first()
     if not race:
         raise HTTPException(
@@ -147,7 +147,7 @@ async def delete_race(
             detail="Race not found"
         )
 
-    race.status = "cancelled"
+    db.delete(race)
     db.commit()
     return None
 
