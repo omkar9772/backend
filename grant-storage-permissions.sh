@@ -7,6 +7,7 @@ SERVICE_ACCOUNT=$(gcloud run services describe naad-bailgada-api \
   --region asia-south1 \
   --format 'value(spec.template.spec.serviceAccountName)' 2>/dev/null)
 
+
 # If no custom service account, use the default compute service account
 if [ -z "$SERVICE_ACCOUNT" ]; then
   PROJECT_ID=$(gcloud config get-value project)
