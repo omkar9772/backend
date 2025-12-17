@@ -13,6 +13,7 @@ from app.models.admin import AdminUser
 from app.models.bull import Bull
 from app.models.owner import Owner
 from app.models.race import Race, RaceResult
+from app.models.marketplace import MarketplaceListing
 
 
 def reset_database():
