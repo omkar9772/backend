@@ -46,7 +46,7 @@ class Settings(BaseSettings):
 
     # GCP
     GCP_PROJECT_ID: str = ""
-    CLOUD_STORAGE_BUCKET: str = ""
+    GCP_BUCKET_NAME: str = "" 
     GOOGLE_APPLICATION_CREDENTIALS: str = ""
     CLOUD_SQL_CONNECTION_NAME: str = ""
     USE_CLOUD_SQL: bool = False
@@ -62,6 +62,7 @@ class Settings(BaseSettings):
     class Config:
         env_file = ".env"
         case_sensitive = True
+        extra = "ignore"
 
 
 # Create settings instance

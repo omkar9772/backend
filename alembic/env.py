@@ -12,7 +12,7 @@ from app.db.base import Base
 # Import all models so Alembic can detect them
 from app.models import (
     Owner, Bull, Race, RaceResult,
-    AdminUser, User
+    AdminUser, User, MarketplaceListing
 )
 
 # this is the Alembic Config object, which provides

@@ -17,6 +17,8 @@ from app.schemas.bull import BullCreate, BullUpdate, BullResponse
 router = APIRouter(prefix="/admin/bulls", tags=["Admin - Bulls"])
 
 
+from app.services.storage import storage_service
+
 @router.post("", response_model=BullResponse, status_code=status.HTTP_201_CREATED)
 async def create_bull(
     bull: BullCreate,
@@ -25,8 +27,6 @@ async def create_bull(
 ):
     """
     Register a new bull - linked to owner
-
-    The bull is linked to the owner via owner_id.
     """
     # Step 1: Fetch owner and validate it exists
     owner = db.query(Owner).filter(Owner.id == bull.owner_id).first()
@@ -52,6 +52,10 @@ async def create_bull(
     db.add(db_bull)
     db.commit()
     db.refresh(db_bull)
+    
+    if db_bull.photo_url:
+        db_bull.photo_url = storage_service.generate_signed_url(db_bull.photo_url)
+        
     return db_bull
 
 
@@ -67,12 +71,6 @@ async def list_bulls(
 ):
     """
     List bulls with pagination and filters
-
-    - **skip**: Number of records to skip
-    - **limit**: Maximum number of records to return
-    - **search**: Search by bull name or registration number
-    - **owner_id**: Filter by owner
-    - **is_active**: Filter by active status
     """
     query = db.query(Bull)
 
@@ -95,6 +93,10 @@ async def list_bulls(
     # Enrich bulls with owner_name
     result = []
     for bull in bulls:
+        # Sign URL
+        if bull.photo_url:
+            bull.photo_url = storage_service.generate_signed_url(bull.photo_url)
+            
         bull_dict = BullResponse.model_validate(bull).model_dump()
         owner = db.query(Owner).filter(Owner.id == bull.owner_id).first()
         bull_dict['owner_name'] = owner.full_name if owner else 'Unknown'
@@ -121,6 +123,10 @@ async def get_bull(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Bull not found"
         )
+        
+    if bull.photo_url:
+        bull.photo_url = storage_service.generate_signed_url(bull.photo_url)
+        
     return bull
 
 
@@ -133,8 +139,6 @@ async def update_bull(
 ):
     """
     Update a bull
-
-    If owner_id is changed, validates that the new owner exists.
     """
     bull = db.query(Bull).filter(Bull.id == bull_id).first()
     if not bull:
@@ -161,6 +165,10 @@ async def update_bull(
 
     db.commit()
     db.refresh(bull)
+    
+    if bull.photo_url:
+        bull.photo_url = storage_service.generate_signed_url(bull.photo_url)
+        
     return bull
 
 

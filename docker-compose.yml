@@ -24,11 +24,15 @@ services:
       dockerfile: Dockerfile
     image: naad_bailgada-backend
     container_name: naad_bailgada_backend
+    env_file:
+      - .env
     environment:
       DATABASE_URL: postgresql://admin:dev_password_change_in_production@db:5432/naad_bailgada
       JWT_SECRET_KEY: dev_secret_key_change_in_production_minimum_32_chars
       ENVIRONMENT: development
-      CLOUD_STORAGE_BUCKET: local-storage
+      # Overriding .env to ensure correct paths inside container
+      GOOGLE_APPLICATION_CREDENTIALS: /app/gcp-key.json
+      GCP_BUCKET_NAME: naad-bailgada-media
     ports:
       - "8000:8000"
     volumes:

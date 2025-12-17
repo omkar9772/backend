@@ -12,6 +12,7 @@ class OwnerBase(BaseModel):
     phone_number: Optional[str] = Field(None, max_length=15)
     email: Optional[EmailStr] = None
     address: Optional[str] = None
+    photo_url: Optional[str] = None
 
 
 class OwnerCreate(OwnerBase):
@@ -23,6 +24,7 @@ class OwnerUpdate(BaseModel):
     phone_number: Optional[str] = Field(None, max_length=15)
     email: Optional[EmailStr] = None
     address: Optional[str] = None
+    photo_url: Optional[str] = None
 
 
 class OwnerResponse(OwnerBase):

@@ -16,6 +16,8 @@ from app.schemas.owner import OwnerCreate, OwnerUpdate, OwnerResponse
 router = APIRouter(prefix="/admin/owners", tags=["Admin - Owners"])
 
 
+from app.services.storage import storage_service
+
 @router.post("", response_model=OwnerResponse, status_code=status.HTTP_201_CREATED)
 async def create_owner(
     owner: OwnerCreate,
@@ -27,6 +29,11 @@ async def create_owner(
     db.add(db_owner)
     db.commit()
     db.refresh(db_owner)
+    
+    # Sign URL if present (though create likely sends URL string, we might want to ensure it's valid)
+    if db_owner.photo_url:
+        db_owner.photo_url = storage_service.generate_signed_url(db_owner.photo_url)
+        
     return db_owner
 
 
@@ -40,10 +47,6 @@ async def list_owners(
 ):
     """
     List owners with pagination and filters
-
-    - **skip**: Number of records to skip
-    - **limit**: Maximum number of records to return
-    - **search**: Search by owner name, phone, or email
     """
     query = db.query(Owner)
 
@@ -57,6 +60,11 @@ async def list_owners(
 
     total = query.count()
     owners = query.order_by(Owner.full_name).offset(skip).limit(limit).all()
+    
+    # Generate signed URLs
+    for owner in owners:
+        if owner.photo_url:
+            owner.photo_url = storage_service.generate_signed_url(owner.photo_url)
 
     return {
         "data": owners,
@@ -79,6 +87,10 @@ async def get_owner(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Owner not found"
         )
+        
+    if owner.photo_url:
+        owner.photo_url = storage_service.generate_signed_url(owner.photo_url)
+        
     return owner
 
 
@@ -104,6 +116,10 @@ async def update_owner(
 
     db.commit()
     db.refresh(owner)
+    
+    if owner.photo_url:
+        owner.photo_url = storage_service.generate_signed_url(owner.photo_url)
+        
     return owner
 
 
