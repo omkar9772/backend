@@ -64,10 +64,10 @@ steps:
       - '80'
       - '--timeout'
       - '300'
-      - '--set-env-vars'
-      - 'ENVIRONMENT=production,GCP_BUCKET_NAME=naad-bailgada-media,GCP_PROJECT_ID=$PROJECT_ID'
-      - '--add-cloudsql-instances'
-      - '$PROJECT_ID:asia-south1:naad-bailgada-db'
+      - '--port'
+      - '8080'
+      - '--service-account'
+      - 'backend-uploader@naad-bailgada-480412.iam.gserviceaccount.com'
     id: 'deploy-cloud-run'
     waitFor: ['push-image-sha', 'push-image-latest']
 
