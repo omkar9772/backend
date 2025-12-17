@@ -65,7 +65,7 @@ steps:
       - '--timeout'
       - '300'
       - '--set-env-vars'
-      - 'ENVIRONMENT=production'
+      - 'ENVIRONMENT=production,GCP_BUCKET_NAME=naad-bailgada-media,GCP_PROJECT_ID=$PROJECT_ID'
       - '--add-cloudsql-instances'
       - '$PROJECT_ID:asia-south1:naad-bailgada-db'
     id: 'deploy-cloud-run'

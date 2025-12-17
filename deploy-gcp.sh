@@ -100,7 +100,7 @@ gcloud run deploy $SERVICE_NAME \
     --memory 1Gi \
     --cpu 1 \
     --timeout 300 \
-    --set-env-vars "ENVIRONMENT=production,DEBUG=False,API_V1_PREFIX=/api/v1,ADMIN_PREFIX=/api/v1/admin" \
+    --set-env-vars "ENVIRONMENT=production,DEBUG=False,API_V1_PREFIX=/api/v1,ADMIN_PREFIX=/api/v1/admin,GCP_BUCKET_NAME=naad-bailgada-media,GCP_PROJECT_ID=$PROJECT_ID" \
     --set-secrets "DATABASE_URL=DATABASE_URL:latest,JWT_SECRET_KEY=JWT_SECRET_KEY:latest" \
     --set-env-vars "CORS_ORIGINS=https://naad-admin.web.app,https://naad-admin.firebaseapp.com,http://localhost:9000"
 
