@@ -2,19 +2,58 @@
 Public user authentication endpoints
 """
 from datetime import timedelta, datetime
-from typing import Annotated
+from typing import Annotated, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi.security import OAuth2PasswordRequestForm
+from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.core.security import verify_password, create_access_token, get_password_hash
+from app.core.security import verify_password, create_access_token, get_password_hash, decode_access_token
 from app.db.base import get_db
 from app.models.user import User
 from app.schemas.user import Token, UserCreate, UserResponse, UserLogin, ChangePasswordRequest
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
+
+# OAuth2 scheme for user authentication
+oauth2_user_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
+
+
+async def get_current_app_user(
+    token: str = Depends(oauth2_user_scheme),
+    db: Session = Depends(get_db)
+) -> User:
+    """
+    Get the current authenticated user from JWT token
+    """
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Could not validate credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+
+    # Decode token
+    payload = decode_access_token(token)
+    if payload is None:
+        raise credentials_exception
+
+    username: Optional[str] = payload.get("sub")
+    if username is None:
+        raise credentials_exception
+
+    # Get user from database
+    user = db.query(User).filter(User.username == username).first()
+    if user is None:
+        raise credentials_exception
+
+    if not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Inactive user"
+        )
+
+    return user
 
 
 @router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
@@ -100,14 +139,10 @@ async def login(
 
 @router.get("/me", response_model=UserResponse)
 async def get_current_user(
-    db: Session = Depends(get_db)
-    # TODO: Add JWT token authentication
+    current_user: User = Depends(get_current_app_user)
 ):
     """Get current user info - requires authentication"""
-    raise HTTPException(
-        status_code=status.HTTP_501_NOT_IMPLEMENTED,
-        detail="Authentication endpoint not yet implemented"
-    )
+    return current_user
 
 
 @router.post("/change-password", status_code=status.HTTP_200_OK)

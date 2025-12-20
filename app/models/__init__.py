@@ -7,6 +7,7 @@ from app.models.race import Race, RaceResult
 from app.models.admin import AdminUser
 from app.models.user import User
 from app.models.marketplace import MarketplaceListing
+from app.models.user_bull import UserBullSell
 
 __all__ = [
     "Owner",
@@ -16,4 +17,5 @@ __all__ = [
     "AdminUser",
     "User",
     "MarketplaceListing",
+    "UserBullSell",
 ]

@@ -27,8 +27,8 @@ services:
     env_file:
       - .env
     environment:
-      DATABASE_URL: postgresql://admin:dev_password_change_in_production@db:5432/naad_bailgada
-      JWT_SECRET_KEY: dev_secret_key_change_in_production_minimum_32_chars
+      # DATABASE_URL will be taken from .env file (Neon production DB)
+      # JWT_SECRET_KEY will be taken from .env file
       ENVIRONMENT: development
       # Overriding .env to ensure correct paths inside container
       GOOGLE_APPLICATION_CREDENTIALS: /app/gcp-key.json
@@ -38,9 +38,7 @@ services:
     volumes:
       - .:/app
       - ./uploads:/app/uploads
-    depends_on:
-      db:
-        condition: service_healthy
+    # Removed db dependency since we're using Neon production database
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 
   adminer:

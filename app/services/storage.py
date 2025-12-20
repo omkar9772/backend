@@ -6,26 +6,43 @@ from pathlib import Path
 from typing import Optional
 from fastapi import UploadFile
 from google.cloud import storage
+from google.auth import compute_engine
 from app.core.config import settings
 import uuid
+from datetime import timedelta
 
 class StorageService:
     def __init__(self):
         self.bucket_name = settings.GCP_BUCKET_NAME
         self.client = None
+        self.signing_credentials = None
+
         if settings.GOOGLE_APPLICATION_CREDENTIALS:
             try:
                 self.client = storage.Client.from_service_account_json(settings.GOOGLE_APPLICATION_CREDENTIALS)
+                # Service account JSON has signing credentials
+                self.signing_credentials = self.client._credentials
             except Exception as e:
                 print(f"Failed to initialize GCP Storage client: {e}")
                 # Re-raise so we know why it failed immediately
                 raise e
         else:
-             # Try default credentials or warn
-             try:
-                 self.client = storage.Client()
-             except Exception as e:
-                 print(f"Failed to initialize GCP Storage client (default creds): {e}")
+            # Use default credentials (for Cloud Run)
+            try:
+                self.client = storage.Client()
+                # For Cloud Run, use compute engine credentials for signing
+                # This uses IAM signBlob API which works with service accounts
+                try:
+                    self.signing_credentials = compute_engine.IDTokenCredentials(
+                        request=None,
+                        target_audience="",
+                        use_metadata_identity_endpoint=True
+                    )
+                except:
+                    # If that fails, signing will use IAM API automatically
+                    self.signing_credentials = None
+            except Exception as e:
+                print(f"Failed to initialize GCP Storage client (default creds): {e}")
 
     async def upload_file(self, file: UploadFile, folder: str = "marketplace") -> str:
         """
@@ -62,7 +79,7 @@ class StorageService:
         """Generate a signed URL for a blob"""
         if not self.client or not self.bucket_name or not blob_name:
             return ""
-            
+
         # Handle case where old full URLs might still be in DB
         prefix = f"https://storage.googleapis.com/{self.bucket_name}/"
         if blob_name.startswith(prefix):
@@ -70,17 +87,23 @@ class StorageService:
 
         bucket = self.client.bucket(self.bucket_name)
         blob = bucket.blob(blob_name)
-        
+
         try:
+            # Generate signed URL - works with both service account JSON and Cloud Run ADC
+            # When using ADC in Cloud Run, this will use IAM signBlob API automatically
             url = blob.generate_signed_url(
                 version="v4",
-                expiration=expiration,
+                expiration=timedelta(hours=1),
                 method="GET"
             )
             return url
         except Exception as e:
             print(f"Error generating signed URL: {e}")
-            return blob_name
+            print(f"Blob: {blob_name}, Bucket: {self.bucket_name}")
+            import traceback
+            traceback.print_exc()
+            # Fallback to public URL format
+            return f"https://storage.googleapis.com/{self.bucket_name}/{blob_name}"
 
     def delete_file(self, file_path: str):
         """Delete file from bucket"""

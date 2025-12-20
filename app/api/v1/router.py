@@ -3,7 +3,7 @@ Main API v1 router - includes all endpoint routers
 """
 from fastapi import APIRouter
 
-from app.api.v1 import admin_auth, auth, owners, bulls, races, race_results, dashboard, public, search, upload, marketplace
+from app.api.v1 import admin_auth, auth, owners, bulls, races, race_results, dashboard, public, search, upload, marketplace, user_bulls
 
 # Create main API v1 router
 api_router = APIRouter()
@@ -20,3 +20,4 @@ api_router.include_router(public.router)
 api_router.include_router(search.router)
 api_router.include_router(upload.router)
 api_router.include_router(marketplace.router)
+api_router.include_router(user_bulls.router)
