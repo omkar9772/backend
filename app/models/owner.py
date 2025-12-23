@@ -19,6 +19,7 @@ class Owner(Base):
     email = Column(String(255), nullable=True, index=True)
     address = Column(Text, nullable=True)
     photo_url = Column(String(500), nullable=True)
+    thumbnail_url = Column(String(500), nullable=True)  # Optimized thumbnail for list view
     created_at = Column(DateTime, default=datetime.utcnow, index=True)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

@@ -13,6 +13,7 @@ class OwnerBase(BaseModel):
     email: Optional[EmailStr] = None
     address: Optional[str] = None
     photo_url: Optional[str] = None
+    thumbnail_url: Optional[str] = None
 
 
 class OwnerCreate(OwnerBase):
@@ -25,6 +26,7 @@ class OwnerUpdate(BaseModel):
     email: Optional[EmailStr] = None
     address: Optional[str] = None
     photo_url: Optional[str] = None
+    thumbnail_url: Optional[str] = None
 
 
 class OwnerResponse(OwnerBase):

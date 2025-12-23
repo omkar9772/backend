@@ -300,6 +300,228 @@ async def get_bull_detail_public(
 
 
 # ============================================================================
+# PUBLIC OWNER APIs
+# ============================================================================
+
+@router.get("/owners", response_model=List[dict])
+async def list_owners_public(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
+    search: Optional[str] = Query(None),
+    db: Session = Depends(get_db)
+):
+    """
+    OPTIMIZED: List owners with bull count (public)
+
+    Performance improvements:
+    - Batch fetches bull counts in a single query (eliminates N+1 problem)
+    - Uses 7-day signed URLs for mobile caching
+
+    - **skip**: Number of records to skip
+    - **limit**: Maximum number of records to return
+    - **search**: Search by owner name, phone, or address
+    """
+    query = db.query(Owner)
+
+    if search:
+        search_filter = f"%{search}%"
+        query = query.filter(
+            or_(
+                Owner.full_name.ilike(search_filter),
+                Owner.phone_number.ilike(search_filter),
+                Owner.address.ilike(search_filter)
+            )
+        )
+
+    owners = query.order_by(Owner.full_name).offset(skip).limit(limit).all()
+
+    if not owners:
+        return []
+
+    # OPTIMIZATION: Batch fetch bull counts for all owners in a single query
+    owner_ids = [owner.id for owner in owners]
+    bull_counts_subq = db.query(
+        Bull.owner_id,
+        func.count(Bull.id).label('count')
+    ).filter(
+        Bull.owner_id.in_(owner_ids),
+        Bull.is_active == True
+    ).group_by(Bull.owner_id).all()
+
+    # Create a map of owner_id -> bull_count
+    bull_counts_map = {str(row.owner_id): row.count for row in bull_counts_subq}
+
+    # Build response
+    result = []
+    for owner in owners:
+        owner_id_str = str(owner.id)
+
+        # Use thumbnail for list view (prefer thumbnail, fallback to original)
+        thumbnail_path = owner.thumbnail_url or owner.photo_url
+        photo_url = None
+        if thumbnail_path:
+            try:
+                photo_url = storage_service.generate_signed_url(thumbnail_path, expiration=604800)
+            except:
+                photo_url = None
+
+        result.append({
+            "id": owner_id_str,
+            "name": owner.full_name,
+            "photo_url": photo_url,  # Thumbnail for fast list view
+            "address": owner.address,
+            "phone": owner.phone_number,
+            "bull_count": bull_counts_map.get(owner_id_str, 0)
+        })
+
+    return result
+
+
+@router.get("/owners/{owner_id}", response_model=dict)
+async def get_owner_detail_public(
+    owner_id: UUID,
+    db: Session = Depends(get_db)
+):
+    """Get detailed owner information (public)"""
+    owner = db.query(Owner).filter(Owner.id == owner_id).first()
+
+    if not owner:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Owner not found"
+        )
+
+    # Count active bulls
+    bull_count = db.query(func.count(Bull.id)).filter(
+        Bull.owner_id == owner.id,
+        Bull.is_active == True
+    ).scalar()
+
+    # Generate signed URL for photo
+    photo_url = None
+    if owner.photo_url:
+        try:
+            photo_url = storage_service.generate_signed_url(owner.photo_url, expiration=604800)
+        except:
+            photo_url = None
+
+    return {
+        "id": str(owner.id),
+        "name": owner.full_name,
+        "photo_url": photo_url,
+        "phone": owner.phone_number,
+        "email": owner.email,
+        "address": owner.address,
+        "bull_count": bull_count or 0,
+        "created_at": owner.created_at.isoformat() if owner.created_at else None
+    }
+
+
+@router.get("/owners/{owner_id}/bulls", response_model=List[dict])
+async def get_owner_bulls_public(
+    owner_id: UUID,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=100),
+    db: Session = Depends(get_db)
+):
+    """
+    Get all bulls owned by a specific owner (public)
+
+    Returns bulls with their statistics in the same format as /public/bulls
+    """
+    # Verify owner exists
+    owner = db.query(Owner).filter(Owner.id == owner_id).first()
+    if not owner:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Owner not found"
+        )
+
+    # Get bulls for this owner
+    bulls = db.query(Bull).filter(
+        Bull.owner_id == owner_id,
+        Bull.is_active == True
+    ).order_by(Bull.name).offset(skip).limit(limit).all()
+
+    if not bulls:
+        return []
+
+    # Batch fetch statistics for all bulls
+    bull_ids = [bull.id for bull in bulls]
+
+    # Total races
+    total_races_subq = db.query(
+        func.coalesce(RaceResult.bull1_id, RaceResult.bull2_id).label('bull_id'),
+        func.count(RaceResult.id).label('count')
+    ).filter(
+        and_(
+            or_(RaceResult.bull1_id.in_(bull_ids), RaceResult.bull2_id.in_(bull_ids)),
+            RaceResult.is_disqualified == False
+        )
+    ).group_by('bull_id').all()
+
+    total_races_map = {str(row.bull_id): row.count for row in total_races_subq}
+
+    # First place wins
+    wins_subq = db.query(
+        func.coalesce(RaceResult.bull1_id, RaceResult.bull2_id).label('bull_id'),
+        func.count(RaceResult.id).label('count')
+    ).filter(
+        and_(
+            or_(RaceResult.bull1_id.in_(bull_ids), RaceResult.bull2_id.in_(bull_ids)),
+            RaceResult.position == 1,
+            RaceResult.is_disqualified == False
+        )
+    ).group_by('bull_id').all()
+
+    wins_map = {str(row.bull_id): row.count for row in wins_subq}
+
+    # Best times
+    best_times_subq = db.query(
+        func.coalesce(RaceResult.bull1_id, RaceResult.bull2_id).label('bull_id'),
+        func.min(RaceResult.time_milliseconds).label('best_time')
+    ).filter(
+        and_(
+            or_(RaceResult.bull1_id.in_(bull_ids), RaceResult.bull2_id.in_(bull_ids)),
+            RaceResult.is_disqualified == False
+        )
+    ).group_by('bull_id').all()
+
+    best_times_map = {str(row.bull_id): row.best_time for row in best_times_subq}
+
+    # Build response
+    result = []
+    for bull in bulls:
+        bull_id_str = str(bull.id)
+
+        # Use thumbnail for list view
+        thumbnail_path = bull.thumbnail_url or bull.photo_url
+        if thumbnail_path:
+            photo_url = storage_service.generate_signed_url(thumbnail_path, expiration=604800)
+        else:
+            photo_url = None
+
+        result.append({
+            "id": bull_id_str,
+            "name": bull.name,
+            "photo_url": photo_url,
+            "breed": bull.breed,
+            "color": bull.color,
+            "birth_year": bull.birth_year,
+            "registration_number": bull.registration_number,
+            "owner_name": owner.full_name,
+            "owner_address": owner.address,
+            "statistics": {
+                "total_races": total_races_map.get(bull_id_str, 0),
+                "first_place_wins": wins_map.get(bull_id_str, 0),
+                "best_time_milliseconds": best_times_map.get(bull_id_str)
+            }
+        })
+
+    return result
+
+
+# ============================================================================
 # PUBLIC RACE APIs
 # ============================================================================
 
