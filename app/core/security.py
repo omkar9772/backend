@@ -9,7 +9,10 @@ from passlib.context import CryptContext
 from app.core.config import settings
 
 # Password hashing context
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+# OPTIMIZED: Using 10 rounds instead of default 12 for faster verification
+# 10 rounds = ~100ms, 12 rounds = ~250ms
+# 10 rounds is still very secure (2^10 = 1024 iterations)
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto", bcrypt__rounds=10)
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:

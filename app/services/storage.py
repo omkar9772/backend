@@ -3,13 +3,14 @@ Google Cloud Storage Service
 """
 import os
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Tuple
 from fastapi import UploadFile
 from google.cloud import storage
 from google.auth import compute_engine
 from app.core.config import settings
 import uuid
 from datetime import timedelta
+from app.utils.image_utils import process_bull_image_upload
 
 class StorageService:
     def __init__(self):
@@ -75,8 +76,64 @@ class StorageService:
         # Return path (blob name) for DB storage
         return unique_filename
 
+    async def upload_bull_image(self, file: UploadFile, folder: str = "race_bulls") -> Tuple[str, str]:
+        """
+        Upload bull image with thumbnail generation
+        Returns (photo_url, thumbnail_url) tuple
+
+        This optimizes loading performance:
+        - Thumbnail: ~30-50 KB (for list views)
+        - Original: ~100-200 KB (for detail views)
+        """
+        if not self.client:
+            raise Exception("GCP Storage client not initialized. Check credentials.")
+
+        if not self.bucket_name:
+            raise Exception("GCP_BUCKET_NAME not set in configuration")
+
+        bucket = self.client.bucket(self.bucket_name)
+
+        # Read original file
+        contents = await file.read()
+
+        # Generate both optimized original and thumbnail
+        optimized_original, thumbnail, original_filename, thumbnail_filename = process_bull_image_upload(
+            contents,
+            file.filename
+        )
+
+        # Generate unique filenames
+        file_ext = Path(file.filename).suffix.lower()
+        base_uuid = str(uuid.uuid4())
+
+        # Upload original
+        original_blob_name = f"{folder}/{base_uuid}{file_ext}"
+        original_blob = bucket.blob(original_blob_name)
+        original_blob.upload_from_string(
+            optimized_original,
+            content_type="image/jpeg"
+        )
+
+        # Upload thumbnail
+        thumbnail_blob_name = f"{folder}/{base_uuid}_thumb{file_ext}"
+        thumbnail_blob = bucket.blob(thumbnail_blob_name)
+        thumbnail_blob.upload_from_string(
+            thumbnail,
+            content_type="image/jpeg"
+        )
+
+        print(f"✓ Uploaded bull image: original={original_blob_name}, thumbnail={thumbnail_blob_name}")
+
+        return original_blob_name, thumbnail_blob_name
+
     def generate_signed_url(self, blob_name: str, expiration: int = 3600) -> str:
-        """Generate a signed URL for a blob"""
+        """
+        Generate a signed URL for a blob
+
+        Args:
+            blob_name: The blob path in GCS
+            expiration: Expiration time in seconds (default: 3600 = 1 hour)
+        """
         if not self.client or not self.bucket_name or not blob_name:
             return ""
 
@@ -93,7 +150,7 @@ class StorageService:
             # When using ADC in Cloud Run, this will use IAM signBlob API automatically
             url = blob.generate_signed_url(
                 version="v4",
-                expiration=timedelta(hours=1),
+                expiration=timedelta(seconds=expiration),
                 method="GET"
             )
             return url

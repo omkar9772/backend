@@ -20,6 +20,7 @@ class Bull(Base):
     breed = Column(String(100), nullable=True, index=True)
     color = Column(String(50), nullable=True)
     photo_url = Column(String(500), nullable=True)
+    thumbnail_url = Column(String(500), nullable=True)  # Optimized thumbnail for list views
     description = Column(Text, nullable=True)
     is_active = Column(Boolean, default=True, index=True)
     registration_number = Column(String(50), unique=True, nullable=True, index=True)

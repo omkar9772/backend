@@ -17,7 +17,8 @@ class MarketplaceListing(Base):
     owner_mobile = Column(String(20), nullable=False)
     location = Column(String(200), nullable=False)
     price = Column(Float, nullable=False)
-    image_url = Column(String(500), nullable=False) # URL to GCP Image
+    image_url = Column(String(500), nullable=False) # URL to GCP Image (original)
+    thumbnail_url = Column(String(500), nullable=True) # Optimized thumbnail for list view
     description = Column(Text, nullable=True)
     
     # Status: 'available', 'sold', 'hidden'

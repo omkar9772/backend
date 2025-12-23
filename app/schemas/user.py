@@ -48,3 +48,10 @@ class ChangePasswordRequest(BaseModel):
     username: str
     old_password: str
     new_password: str = Field(..., min_length=6)
+
+
+class UpdateUserRequest(BaseModel):
+    username: Optional[str] = Field(None, min_length=3, max_length=50)
+    email: Optional[EmailStr] = None
+    full_name: Optional[str] = None
+    phone: Optional[str] = None

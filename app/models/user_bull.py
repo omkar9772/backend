@@ -24,7 +24,8 @@ class UserBullSell(Base):
     color = Column(String(50), nullable=True)
     description = Column(Text, nullable=True)
     price = Column(Float, nullable=False)
-    image_url = Column(String(500), nullable=False)  # URL to GCP Image in user_bulls_sell folder
+    image_url = Column(String(500), nullable=False)  # URL to GCP Image (original)
+    thumbnail_url = Column(String(500), nullable=True)  # Optimized thumbnail for list view
     location = Column(String(200), nullable=True)
     owner_mobile = Column(String(20), nullable=True)
 

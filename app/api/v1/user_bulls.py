@@ -72,26 +72,32 @@ async def list_my_bulls(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_app_user)
 ):
-    """List all bulls listed by the current user"""
+    """
+    List all bulls listed by the current user
+
+    OPTIMIZED:
+    - Removed separate count() query - calculate from fetched data
+    - Use thumbnails for list view (smaller/faster)
+    - 7-day signed URL expiration for better caching
+    """
     bulls = db.query(UserBullSell).filter(
         UserBullSell.user_id == current_user.id
     ).order_by(UserBullSell.created_at.desc()).all()
 
-    # Count active bulls (not sold or expired)
-    active_count = db.query(func.count(UserBullSell.id)).filter(
-        UserBullSell.user_id == current_user.id,
-        UserBullSell.status == 'available'
-    ).scalar()
+    # OPTIMIZED: Calculate active count from already fetched bulls (no extra query)
+    active_count = sum(1 for bull in bulls if bull.status == 'available')
 
-    # Generate signed URLs for all bulls
+    # Generate signed URLs with thumbnails for list view
     for bull in bulls:
         if bull.image_url:
-            bull.image_url = storage_service.generate_signed_url(bull.image_url)
+            # Use THUMBNAIL for list view (smaller/faster)
+            thumbnail_path = bull.thumbnail_url or bull.image_url
+            bull.image_url = storage_service.generate_signed_url(thumbnail_path, expiration=604800)  # 7 days
 
     return UserBullSellListResponse(
         bulls=bulls,
         total=len(bulls),
-        active_count=active_count or 0,
+        active_count=active_count,
         max_allowed=MAX_BULLS_PER_USER
     )
 
@@ -114,9 +120,9 @@ async def get_bull_detail(
             detail="Bull not found or you don't have permission to view it"
         )
 
-    # Generate signed URL
+    # For detail view, serve ORIGINAL high-quality image
     if bull.image_url:
-        bull.image_url = storage_service.generate_signed_url(bull.image_url)
+        bull.image_url = storage_service.generate_signed_url(bull.image_url, expiration=604800)  # 7 days
 
     return bull
 
@@ -167,9 +173,9 @@ async def create_bull_listing(
             detail="Price must be greater than 0"
         )
 
-    # 4. Upload image to GCP in user_bulls_sell folder
+    # 4. Upload image to GCP with automatic thumbnail generation
     try:
-        image_path = await storage_service.upload_file(image, folder="user_bulls_sell")
+        image_path, thumbnail_path = await storage_service.upload_bull_image(image, folder="user_bulls_sell")
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -186,6 +192,7 @@ async def create_bull_listing(
         description=description,
         price=price,
         image_url=image_path,
+        thumbnail_url=thumbnail_path,
         location=location,
         owner_mobile=owner_mobile,
         status="available",
@@ -196,9 +203,9 @@ async def create_bull_listing(
     db.commit()
     db.refresh(bull)
 
-    # 6. Generate signed URL for response
+    # 6. Generate signed URL for response (use original for detail/create response)
     if bull.image_url:
-        bull.image_url = storage_service.generate_signed_url(bull.image_url)
+        bull.image_url = storage_service.generate_signed_url(bull.image_url, expiration=604800)  # 7 days
 
     return bull
 
@@ -267,13 +274,16 @@ async def update_bull_listing(
     if image:
         validate_image(image)
         try:
-            # Delete old image
+            # Delete old images (both original and thumbnail)
             if bull.image_url:
                 storage_service.delete_file(bull.image_url)
+            if bull.thumbnail_url:
+                storage_service.delete_file(bull.thumbnail_url)
 
-            # Upload new image
-            new_image_path = await storage_service.upload_file(image, folder="user_bulls_sell")
+            # Upload new image with automatic thumbnail generation
+            new_image_path, new_thumbnail_path = await storage_service.upload_bull_image(image, folder="user_bulls_sell")
             bull.image_url = new_image_path
+            bull.thumbnail_url = new_thumbnail_path
         except Exception as e:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -284,9 +294,9 @@ async def update_bull_listing(
     db.commit()
     db.refresh(bull)
 
-    # 4. Generate signed URL for response
+    # 4. Generate signed URL for response (use original for detail/update response)
     if bull.image_url:
-        bull.image_url = storage_service.generate_signed_url(bull.image_url)
+        bull.image_url = storage_service.generate_signed_url(bull.image_url, expiration=604800)  # 7 days
 
     return bull
 
@@ -310,9 +320,11 @@ async def delete_bull_listing(
             detail="Bull not found or you don't have permission to delete it"
         )
 
-    # Delete image from storage
+    # Delete images from storage (both original and thumbnail)
     if bull.image_url:
         storage_service.delete_file(bull.image_url)
+    if bull.thumbnail_url:
+        storage_service.delete_file(bull.thumbnail_url)
 
     db.delete(bull)
     db.commit()
