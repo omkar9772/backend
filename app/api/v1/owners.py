@@ -137,6 +137,12 @@ async def delete_owner(
             detail="Owner not found"
         )
 
+    # Delete images from storage before deleting owner
+    if owner.photo_url:
+        storage_service.delete_file(owner.photo_url)
+    if owner.thumbnail_url:
+        storage_service.delete_file(owner.thumbnail_url)
+
     db.delete(owner)
     db.commit()
     return None

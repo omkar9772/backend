@@ -178,7 +178,7 @@ async def delete_bull(
     db: Session = Depends(get_db),
     current_user: AdminUser = Depends(get_current_active_admin)
 ):
-    """Deactivate a bull (soft delete)"""
+    """Delete a bull (hard delete)"""
     bull = db.query(Bull).filter(Bull.id == bull_id).first()
     if not bull:
         raise HTTPException(
@@ -186,6 +186,12 @@ async def delete_bull(
             detail="Bull not found"
         )
 
-    bull.is_active = False
+    # Delete images from storage before deleting bull
+    if bull.photo_url:
+        storage_service.delete_file(bull.photo_url)
+    if bull.thumbnail_url:
+        storage_service.delete_file(bull.thumbnail_url)
+
+    db.delete(bull)
     db.commit()
     return None
