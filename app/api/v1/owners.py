@@ -112,15 +112,25 @@ async def update_owner(
 
     # Update fields
     update_data = owner_update.model_dump(exclude_unset=True)
+
+    # Delete old images from storage if photo_url or thumbnail_url is being updated
+    if 'photo_url' in update_data and update_data['photo_url'] != owner.photo_url:
+        if owner.photo_url:
+            storage_service.delete_file(owner.photo_url)
+
+    if 'thumbnail_url' in update_data and update_data['thumbnail_url'] != owner.thumbnail_url:
+        if owner.thumbnail_url:
+            storage_service.delete_file(owner.thumbnail_url)
+
     for field, value in update_data.items():
         setattr(owner, field, value)
 
     db.commit()
     db.refresh(owner)
-    
+
     if owner.photo_url:
         owner.photo_url = storage_service.generate_signed_url(owner.photo_url)
-        
+
     return owner
 
 
@@ -131,19 +141,20 @@ async def delete_owner(
     current_user: AdminUser = Depends(get_current_active_admin)
 ):
     """Delete an owner"""
-    owner = db.query(Owner).filter(Owner.id == owner_id).first()
-    if not owner:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Owner not found"
-        )
-
-    # Check if owner has any bulls associated
+    # Check if owner has any bulls associated (early check for fast failure)
     bulls_count = db.query(Bull).filter(Bull.owner_id == owner_id).count()
     if bulls_count > 0:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Cannot delete owner. They have {bulls_count} bull(s) associated. Please reassign or delete the bulls first."
+        )
+
+    # Fetch owner only if bulls check passes
+    owner = db.query(Owner).filter(Owner.id == owner_id).first()
+    if not owner:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Owner not found"
         )
 
     # Delete images from storage before deleting owner

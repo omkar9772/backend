@@ -159,16 +159,25 @@ async def update_bull(
                 detail=f"Owner with ID '{update_data['owner_id']}' not found"
             )
 
+    # Delete old images from storage if photo_url or thumbnail_url is being updated
+    if 'photo_url' in update_data and update_data['photo_url'] != bull.photo_url:
+        if bull.photo_url:
+            storage_service.delete_file(bull.photo_url)
+
+    if 'thumbnail_url' in update_data and update_data['thumbnail_url'] != bull.thumbnail_url:
+        if bull.thumbnail_url:
+            storage_service.delete_file(bull.thumbnail_url)
+
     # Apply updates
     for field, value in update_data.items():
         setattr(bull, field, value)
 
     db.commit()
     db.refresh(bull)
-    
+
     if bull.photo_url:
         bull.photo_url = storage_service.generate_signed_url(bull.photo_url)
-        
+
     return bull
 
 
