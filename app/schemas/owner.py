@@ -32,6 +32,7 @@ class OwnerUpdate(BaseModel):
 class OwnerResponse(OwnerBase):
     id: UUID
     photo_url: Optional[str] = None
+    thumbnail_url: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 

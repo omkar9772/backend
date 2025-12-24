@@ -29,6 +29,7 @@ class BullCreate(BaseModel):
     description: Optional[str] = None
     registration_number: Optional[str] = Field(None, max_length=50)
     photo_url: Optional[str] = Field(None, max_length=500)
+    thumbnail_url: Optional[str] = Field(None, max_length=500)
 
 
 class BullUpdate(BaseModel):
@@ -39,12 +40,14 @@ class BullUpdate(BaseModel):
     color: Optional[str] = Field(None, max_length=50)
     description: Optional[str] = None
     photo_url: Optional[str] = Field(None, max_length=500)
+    thumbnail_url: Optional[str] = Field(None, max_length=500)
     is_active: Optional[bool] = None
 
 
 class BullResponse(BullBase):
     id: UUID
     photo_url: Optional[str] = None
+    thumbnail_url: Optional[str] = None
     is_active: bool
     created_at: datetime
     updated_at: datetime
