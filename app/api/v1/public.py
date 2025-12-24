@@ -7,7 +7,7 @@ from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
-from sqlalchemy import func, and_, or_
+from sqlalchemy import func, and_, or_, case
 
 from app.db.base import get_db
 from app.models.bull import Bull
@@ -333,7 +333,14 @@ async def list_owners_public(
             )
         )
 
-    owners = query.order_by(Owner.full_name).offset(skip).limit(limit).all()
+    # Sort by: 1) owners with photos first, 2) alphabetically by name
+    # Using CASE to create a sort key: 0 for photos present, 1 for no photos
+    has_photo = case(
+        (Owner.photo_url.isnot(None), 0),
+        (Owner.thumbnail_url.isnot(None), 0),
+        else_=1
+    )
+    owners = query.order_by(has_photo, Owner.full_name).offset(skip).limit(limit).all()
 
     if not owners:
         return []

@@ -126,6 +126,56 @@ class StorageService:
 
         return original_blob_name, thumbnail_blob_name
 
+    async def upload_owner_image(self, file: UploadFile, folder: str = "owners") -> Tuple[str, str]:
+        """
+        Upload owner image with thumbnail generation
+        Returns (photo_url, thumbnail_url) tuple
+
+        This optimizes loading performance:
+        - Thumbnail: ~30-50 KB (for list views)
+        - Original: ~100-200 KB (for detail views)
+        """
+        if not self.client:
+            raise Exception("GCP Storage client not initialized. Check credentials.")
+
+        if not self.bucket_name:
+            raise Exception("GCP_BUCKET_NAME not set in configuration")
+
+        bucket = self.client.bucket(self.bucket_name)
+
+        # Read original file
+        contents = await file.read()
+
+        # Generate both optimized original and thumbnail (reuse bull image processing)
+        optimized_original, thumbnail, original_filename, thumbnail_filename = process_bull_image_upload(
+            contents,
+            file.filename
+        )
+
+        # Generate unique filenames
+        file_ext = Path(file.filename).suffix.lower()
+        base_uuid = str(uuid.uuid4())
+
+        # Upload original
+        original_blob_name = f"{folder}/{base_uuid}{file_ext}"
+        original_blob = bucket.blob(original_blob_name)
+        original_blob.upload_from_string(
+            optimized_original,
+            content_type="image/jpeg"
+        )
+
+        # Upload thumbnail
+        thumbnail_blob_name = f"{folder}/{base_uuid}_thumb{file_ext}"
+        thumbnail_blob = bucket.blob(thumbnail_blob_name)
+        thumbnail_blob.upload_from_string(
+            thumbnail,
+            content_type="image/jpeg"
+        )
+
+        print(f"✓ Uploaded owner image: original={original_blob_name}, thumbnail={thumbnail_blob_name}")
+
+        return original_blob_name, thumbnail_blob_name
+
     def generate_signed_url(self, blob_name: str, expiration: int = 3600) -> str:
         """
         Generate a signed URL for a blob

@@ -88,17 +88,17 @@ async def create_marketplace_item(
 ):
     """Create a new marketplace listing with image upload"""
     
-    # 1. Upload image to GCP
+    # 1. Upload image to GCP with thumbnail generation
     try:
-        # Returns blob path (e.g., "selling_bulls/xyz.jpg")
-        image_path = await storage_service.upload_file(image, folder="selling_bulls")
+        # Returns tuple: (photo_url, thumbnail_url)
+        image_path, thumbnail_path = await storage_service.upload_bull_image(image, folder="selling_bulls")
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to upload image: {str(e)}"
         )
-        
-    # 2. Create DB entry
+
+    # 2. Create DB entry with both image and thumbnail
     listing = MarketplaceListing(
         name=name,
         owner_name=owner_name,
@@ -106,7 +106,8 @@ async def create_marketplace_item(
         location=location,
         price=price,
         description=description,
-        image_url=image_path, # Store path
+        image_url=image_path, # Store original path
+        thumbnail_url=thumbnail_path, # Store thumbnail path
         status="available"
     )
     
@@ -151,13 +152,16 @@ async def update_marketplace_item(
     # Update image if provided
     if image:
         try:
-            # Delete old image if it exists
+            # Delete old image and thumbnail if they exist
             if listing.image_url:
                 storage_service.delete_file(listing.image_url)
-                
-            # Upload new
-            new_path = await storage_service.upload_file(image, folder="selling_bulls")
+            if listing.thumbnail_url:
+                storage_service.delete_file(listing.thumbnail_url)
+
+            # Upload new with thumbnail generation
+            new_path, new_thumbnail_path = await storage_service.upload_bull_image(image, folder="selling_bulls")
             listing.image_url = new_path
+            listing.thumbnail_url = new_thumbnail_path
         except Exception as e:
              raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -184,10 +188,12 @@ async def delete_marketplace_item(
     if not listing:
         raise HTTPException(status_code=404, detail="Listing not found")
         
-    # Delete image from storage
+    # Delete image and thumbnail from storage
     if listing.image_url:
         storage_service.delete_file(listing.image_url)
-        
+    if listing.thumbnail_url:
+        storage_service.delete_file(listing.thumbnail_url)
+
     db.delete(listing)
     db.commit()
     return None
