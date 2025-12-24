@@ -11,6 +11,7 @@ from app.core.dependencies import get_current_active_admin
 from app.db.base import get_db
 from app.models.admin import AdminUser
 from app.models.owner import Owner
+from app.models.bull import Bull
 from app.schemas.owner import OwnerCreate, OwnerUpdate, OwnerResponse
 
 router = APIRouter(prefix="/admin/owners", tags=["Admin - Owners"])
@@ -135,6 +136,14 @@ async def delete_owner(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Owner not found"
+        )
+
+    # Check if owner has any bulls associated
+    bulls_count = db.query(Bull).filter(Bull.owner_id == owner_id).count()
+    if bulls_count > 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Cannot delete owner. They have {bulls_count} bull(s) associated. Please reassign or delete the bulls first."
         )
 
     # Delete images from storage before deleting owner
