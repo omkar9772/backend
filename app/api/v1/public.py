@@ -1026,18 +1026,55 @@ async def get_available_bulls(
     db: Session = Depends(get_db)
 ):
     """
-    OPTIMIZED: Get available bulls for adoption/purchase (public)
+    OPTIMIZED: Get available bulls for sale (public)
 
-    Returns marketplace listings with status 'available'
+    Returns BOTH:
+    1. User-created bulls (UserBullSell) - active and not expired
+    2. Admin marketplace listings (MarketplaceListing) - available status
+
+    Combined and sorted by created_at descending
     Uses thumbnails for list view (consistent with bulls listing)
     """
-    listings = db.query(MarketplaceListing).filter(
-        MarketplaceListing.status == "available"
-    ).order_by(MarketplaceListing.created_at.desc()).offset(skip).limit(limit).all()
+    # Query user-created bulls (active and not expired)
+    user_bulls = db.query(UserBullSell).filter(
+        UserBullSell.status == "available",
+        UserBullSell.expires_at > datetime.utcnow()
+    ).all()
 
-    result = []
-    for listing in listings:
-        # Use THUMBNAIL for list view (prefer thumbnail, fallback to original)
+    # Query admin marketplace listings (available status)
+    marketplace_listings = db.query(MarketplaceListing).filter(
+        MarketplaceListing.status == "available"
+    ).all()
+
+    # Combine both lists with a unified format
+    combined_results = []
+
+    # Add user bulls
+    for bull in user_bulls:
+        thumbnail_path = bull.thumbnail_url or bull.image_url
+        image_url = None
+        if thumbnail_path:
+            try:
+                image_url = storage_service.generate_signed_url(thumbnail_path, expiration=604800)
+            except:
+                image_url = None
+
+        combined_results.append({
+            "id": str(bull.id),
+            "name": bull.name,
+            "owner_name": bull.owner_name,
+            "owner_mobile": bull.owner_mobile,
+            "location": bull.location,
+            "price": bull.price,
+            "image_url": image_url,
+            "description": bull.description,
+            "status": bull.status,
+            "created_at": bull.created_at.isoformat() if bull.created_at else None,
+            "source": "user"  # Indicate source
+        })
+
+    # Add marketplace listings
+    for listing in marketplace_listings:
         thumbnail_path = listing.thumbnail_url or listing.image_url
         image_url = None
         if thumbnail_path:
@@ -1046,20 +1083,27 @@ async def get_available_bulls(
             except:
                 image_url = None
 
-        result.append({
+        combined_results.append({
             "id": str(listing.id),
             "name": listing.name,
             "owner_name": listing.owner_name,
             "owner_mobile": listing.owner_mobile,
             "location": listing.location,
             "price": listing.price,
-            "image_url": image_url,  # Thumbnail for fast loading
+            "image_url": image_url,
             "description": listing.description,
             "status": listing.status,
-            "created_at": listing.created_at.isoformat() if listing.created_at else None
+            "created_at": listing.created_at.isoformat() if listing.created_at else None,
+            "source": "marketplace"  # Indicate source
         })
 
-    return result
+    # Sort combined results by created_at (most recent first)
+    combined_results.sort(key=lambda x: x["created_at"] if x["created_at"] else "", reverse=True)
+
+    # Apply pagination
+    paginated_results = combined_results[skip:skip + limit]
+
+    return paginated_results
 
 
 @router.get("/available-bulls/{listing_id}", response_model=dict)
@@ -1067,37 +1111,76 @@ async def get_available_bull_detail(
     listing_id: UUID,
     db: Session = Depends(get_db)
 ):
-    """Get detailed information about an available bull (public)"""
+    """Get detailed information about an available bull (public)
+
+    Checks both UserBullSell and MarketplaceListing tables
+    """
+    # Try to find in user bulls first
+    bull = db.query(UserBullSell).filter(
+        UserBullSell.id == listing_id
+    ).first()
+
+    if bull:
+        # Found in UserBullSell - return with extra fields
+        image_url = bull.image_url
+        if image_url:
+            try:
+                image_url = storage_service.generate_signed_url(image_url, expiration=604800)
+            except:
+                image_url = None
+
+        return {
+            "id": str(bull.id),
+            "name": bull.name,
+            "owner_name": bull.owner_name,
+            "owner_mobile": bull.owner_mobile,
+            "location": bull.location,
+            "price": bull.price,
+            "image_url": image_url,
+            "description": bull.description,
+            "status": bull.status,
+            "breed": bull.breed,
+            "birth_year": bull.birth_year,
+            "color": bull.color,
+            "expires_at": bull.expires_at.isoformat() if bull.expires_at else None,
+            "days_remaining": bull.days_remaining,
+            "created_at": bull.created_at.isoformat() if bull.created_at else None,
+            "source": "user"
+        }
+
+    # Try to find in marketplace listings
     listing = db.query(MarketplaceListing).filter(
         MarketplaceListing.id == listing_id
     ).first()
 
-    if not listing:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Listing not found"
-        )
+    if listing:
+        # Found in MarketplaceListing
+        image_url = listing.image_url
+        if image_url:
+            try:
+                image_url = storage_service.generate_signed_url(image_url, expiration=604800)
+            except:
+                image_url = None
 
-    # Use ORIGINAL high-quality image for detail view
-    image_url = listing.image_url
-    if image_url:
-        try:
-            image_url = storage_service.generate_signed_url(image_url, expiration=604800)
-        except:
-            image_url = None
+        return {
+            "id": str(listing.id),
+            "name": listing.name,
+            "owner_name": listing.owner_name,
+            "owner_mobile": listing.owner_mobile,
+            "location": listing.location,
+            "price": listing.price,
+            "image_url": image_url,
+            "description": listing.description,
+            "status": listing.status,
+            "created_at": listing.created_at.isoformat() if listing.created_at else None,
+            "source": "marketplace"
+        }
 
-    return {
-        "id": str(listing.id),
-        "name": listing.name,
-        "owner_name": listing.owner_name,
-        "owner_mobile": listing.owner_mobile,
-        "location": listing.location,
-        "price": listing.price,
-        "image_url": image_url,
-        "description": listing.description,
-        "status": listing.status,
-        "created_at": listing.created_at.isoformat() if listing.created_at else None
-    }
+    # Not found in either table
+    raise HTTPException(
+        status_code=status.HTTP_404_NOT_FOUND,
+        detail="Bull listing not found"
+    )
 
 
 # ============================================================================
@@ -1142,6 +1225,7 @@ async def get_user_bulls_for_sale(
             "price": bull.price,
             "image_url": image_url,
             "location": bull.location,
+            "owner_name": bull.owner_name,
             "owner_mobile": bull.owner_mobile,
             "status": bull.status,
             "created_at": bull.created_at.isoformat() if bull.created_at else None,
@@ -1186,6 +1270,7 @@ async def get_user_bull_detail(
         "price": bull.price,
         "image_url": image_url,
         "location": bull.location,
+        "owner_name": bull.owner_name,
         "owner_mobile": bull.owner_mobile,
         "status": bull.status,
         "created_at": bull.created_at.isoformat() if bull.created_at else None,

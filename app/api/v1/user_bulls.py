@@ -132,12 +132,13 @@ async def create_bull_listing(
     name: str = Form(...),
     price: float = Form(...),
     image: UploadFile = File(...),
+    owner_name: str = Form(...),
+    owner_mobile: str = Form(...),
     breed: Optional[str] = Form(None),
     birth_year: Optional[int] = Form(None),
     color: Optional[str] = Form(None),
     description: Optional[str] = Form(None),
     location: Optional[str] = Form(None),
-    owner_mobile: Optional[str] = Form(None),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_app_user)
 ):
@@ -194,6 +195,7 @@ async def create_bull_listing(
         image_url=image_path,
         thumbnail_url=thumbnail_path,
         location=location,
+        owner_name=owner_name,
         owner_mobile=owner_mobile,
         status="available",
         expires_at=datetime.utcnow() + timedelta(days=30)
@@ -220,6 +222,7 @@ async def update_bull_listing(
     color: Optional[str] = Form(None),
     description: Optional[str] = Form(None),
     location: Optional[str] = Form(None),
+    owner_name: Optional[str] = Form(None),
     owner_mobile: Optional[str] = Form(None),
     status: Optional[str] = Form(None),
     image: Optional[UploadFile] = File(None),
@@ -260,6 +263,8 @@ async def update_bull_listing(
         bull.description = description
     if location is not None:
         bull.location = location
+    if owner_name is not None:
+        bull.owner_name = owner_name
     if owner_mobile is not None:
         bull.owner_mobile = owner_mobile
     if status is not None:

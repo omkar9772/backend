@@ -16,6 +16,7 @@ class UserBullSellCreate(BaseModel):
     description: Optional[str] = None
     price: float = Field(..., gt=0)
     location: Optional[str] = Field(None, max_length=200)
+    owner_name: Optional[str] = Field(None, max_length=200)
     owner_mobile: Optional[str] = Field(None, max_length=20)
 
     @field_validator('price')
@@ -35,6 +36,7 @@ class UserBullSellUpdate(BaseModel):
     description: Optional[str] = None
     price: Optional[float] = Field(None, gt=0)
     location: Optional[str] = Field(None, max_length=200)
+    owner_name: Optional[str] = Field(None, max_length=200)
     owner_mobile: Optional[str] = Field(None, max_length=20)
     status: Optional[str] = Field(None, pattern='^(available|sold|expired)$')
 
@@ -51,6 +53,7 @@ class UserBullSellResponse(BaseModel):
     price: float
     image_url: str
     location: Optional[str]
+    owner_name: Optional[str]
     owner_mobile: Optional[str]
     status: str
     created_at: datetime

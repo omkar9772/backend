@@ -27,7 +27,8 @@ class UserBullSell(Base):
     image_url = Column(String(500), nullable=False)  # URL to GCP Image (original)
     thumbnail_url = Column(String(500), nullable=True)  # Optimized thumbnail for list view
     location = Column(String(200), nullable=True)
-    owner_mobile = Column(String(20), nullable=True)
+    owner_name = Column(String(200), nullable=False)  # Owner's name for contact
+    owner_mobile = Column(String(20), nullable=False)  # Owner's mobile for contact
 
     # Status: 'available', 'sold', 'expired'
     status = Column(String(20), default="available", index=True, nullable=False)
