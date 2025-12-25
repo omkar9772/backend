@@ -48,3 +48,6 @@ mypy==1.8.0
 
 # Image Processing (for bull photos)
 pillow==10.2.0
+
+# Firebase Admin SDK (for push notifications)
+firebase-admin==6.5.0
