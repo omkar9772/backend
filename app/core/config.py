@@ -22,7 +22,7 @@ class Settings(BaseSettings):
     # JWT Authentication
     JWT_SECRET_KEY: str = "your_secret_key_here_minimum_32_characters_long"
     JWT_ALGORITHM: str = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 480  # 8 hours
 
     # CORS
     CORS_ORIGINS: str = "http://localhost:8000,http://localhost:9000,http://localhost:8081,http://127.0.0.1:8000,http://127.0.0.1:9000"
