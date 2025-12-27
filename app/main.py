@@ -28,11 +28,15 @@ app = FastAPI(
 async def startup_event():
     """Initialize services on startup"""
     from app.services.firebase_service import firebase_service
+    import os
 
     try:
-        # Initialize Firebase Admin SDK
-        firebase_service.initialize("gcp-key.json")
-        logger.info("✅ Firebase Admin SDK initialized at startup")
+        # Initialize Firebase Admin SDK with Firebase-specific credentials
+        # Use secret path in production (Cloud Run), local file in development
+        firebase_key_path = "/secrets/firebase-key.json" if os.path.exists("/secrets/firebase-key.json") else "firebase-key.json"
+
+        firebase_service.initialize(firebase_key_path)
+        logger.info(f"✅ Firebase Admin SDK initialized at startup (using {firebase_key_path})")
     except Exception as e:
         logger.warning(f"⚠️ Firebase initialization warning (may already be initialized): {e}")
 

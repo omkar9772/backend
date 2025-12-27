@@ -14,7 +14,7 @@ RED='\033[0;31m'
 NC='\033[0m' # No Color
 
 # Configuration
-PROJECT_ID=${GCP_PROJECT_ID:-"naad-admin"}
+PROJECT_ID=${GCP_PROJECT_ID:-"naad-bailgada-480412"}
 REGION="asia-south1"
 SERVICE_NAME="naad-bailgada-api"
 
@@ -55,7 +55,19 @@ echo -e "${GREEN}✅ APIs enabled${NC}"
 if [ -f .env ]; then
     echo ""
     echo "📋 Loading environment variables from .env..."
-    export $(cat .env | grep -v '^#' | xargs)
+    set -a
+    source .env
+    set +a
+
+    # Verify critical env vars
+    if [ -z "$DATABASE_URL" ]; then
+        echo -e "${RED}❌ DATABASE_URL not found in .env${NC}"
+        exit 1
+    fi
+    if [ -z "$JWT_SECRET_KEY" ]; then
+        echo -e "${RED}❌ JWT_SECRET_KEY not found in .env${NC}"
+        exit 1
+    fi
 else
     echo -e "${RED}❌ .env file not found${NC}"
     exit 1
@@ -81,6 +93,19 @@ echo -n "$JWT_SECRET_KEY" | gcloud secrets create JWT_SECRET_KEY \
 echo -n "$JWT_SECRET_KEY" | gcloud secrets versions add JWT_SECRET_KEY \
     --data-file=-
 
+# Firebase Credentials
+if [ -f firebase-key.json ]; then
+    echo "Creating firebase-credentials secret..."
+    gcloud secrets create firebase-credentials \
+        --data-file=firebase-key.json \
+        --replication-policy="automatic" 2>/dev/null || \
+    gcloud secrets versions add firebase-credentials \
+        --data-file=firebase-key.json
+    echo -e "${GREEN}✅ Firebase credentials uploaded${NC}"
+else
+    echo -e "${YELLOW}⚠️  firebase-key.json not found - notifications may not work${NC}"
+fi
+
 echo -e "${GREEN}✅ Secrets configured${NC}"
 
 # Deploy to Cloud Run
@@ -100,9 +125,8 @@ gcloud run deploy $SERVICE_NAME \
     --memory 1Gi \
     --cpu 1 \
     --timeout 300 \
-    --set-env-vars "ENVIRONMENT=production,DEBUG=False,API_V1_PREFIX=/api/v1,ADMIN_PREFIX=/api/v1/admin,GCP_BUCKET_NAME=naad-bailgada-media,GCP_PROJECT_ID=$PROJECT_ID" \
-    --set-secrets "DATABASE_URL=DATABASE_URL:latest,JWT_SECRET_KEY=JWT_SECRET_KEY:latest" \
-    --set-env-vars "CORS_ORIGINS=https://naad-admin.web.app,https://naad-admin.firebaseapp.com,http://localhost:9000"
+    --set-env-vars ENVIRONMENT=production,DEBUG=False,API_V1_PREFIX=/api/v1,ADMIN_PREFIX=/api/v1/admin,GCP_BUCKET_NAME=naad-bailgada-media,GCP_PROJECT_ID=$PROJECT_ID,CORS_ORIGINS="*" \
+    --set-secrets DATABASE_URL=DATABASE_URL:latest,JWT_SECRET_KEY=JWT_SECRET_KEY:latest,/secrets/firebase-key.json=firebase-credentials:latest
 
 if [ $? -eq 0 ]; then
     echo ""

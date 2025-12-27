@@ -68,6 +68,10 @@ steps:
       - '8080'
       - '--service-account'
       - 'backend-uploader@naad-bailgada-480412.iam.gserviceaccount.com'
+      - '--set-env-vars'
+      - 'ENVIRONMENT=production,DEBUG=False,API_V1_PREFIX=/api/v1,ADMIN_PREFIX=/api/v1/admin,GCP_BUCKET_NAME=naad-bailgada-media,GCP_PROJECT_ID=$PROJECT_ID,CORS_ORIGINS=*'
+      - '--set-secrets'
+      - 'DATABASE_URL=DATABASE_URL:latest,JWT_SECRET_KEY=JWT_SECRET_KEY:latest,/secrets/firebase-key.json=firebase-credentials:latest'
     id: 'deploy-cloud-run'
     waitFor: ['push-image-sha', 'push-image-latest']
 

@@ -179,8 +179,12 @@ async def send_race_notification(
 
     try:
         # Initialize Firebase (only initializes once due to singleton pattern)
+        # Note: firebase_service is already initialized at app startup in main.py
+        # This is just a safety check
+        import os
         try:
-            firebase_service.initialize("gcp-key.json")
+            firebase_key_path = "/secrets/firebase-key.json" if os.path.exists("/secrets/firebase-key.json") else "firebase-key.json"
+            firebase_service.initialize(firebase_key_path)
         except Exception as firebase_init_error:
             logger.error(f"Firebase initialization error: {firebase_init_error}")
             # If already initialized, this is fine - continue
