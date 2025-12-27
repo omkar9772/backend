@@ -24,13 +24,14 @@ router = APIRouter(prefix="/public", tags=["Public APIs"])
 
 @router.get("/dashboard")
 async def get_dashboard_public(
-    recent_limit: int = Query(4, ge=1, le=10),
-    upcoming_limit: int = Query(4, ge=1, le=10),
     db: Session = Depends(get_db)
 ):
     """
     OPTIMIZED: Get both recent and upcoming races in a single API call
     Perfect for mobile app home screen
+
+    Recent races: Filtered by end_date < today (limit: 4)
+    Upcoming races: Filtered by start_date >= today (limit: 4)
 
     Performance: ~500ms vs 4000ms (2 separate calls)
     """
@@ -40,13 +41,12 @@ async def get_dashboard_public(
 
     # Parallel queries - both executed in same database round trip
     recent_races = db.query(Race).filter(
-        Race.status == "completed"
-    ).order_by(Race.end_date.desc()).limit(recent_limit).all()
+        Race.end_date < now
+    ).order_by(Race.end_date.desc()).limit(4).all()
 
     upcoming_races = db.query(Race).filter(
-        Race.status == "scheduled",
         Race.start_date >= now
-    ).order_by(Race.start_date.asc()).limit(upcoming_limit).all()
+    ).order_by(Race.start_date.asc()).limit(4).all()
 
     return {
         "recent": [
