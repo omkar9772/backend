@@ -161,8 +161,17 @@ async def send_race_notification(
     from uuid import UUID
 
     try:
-        # Initialize Firebase
-        firebase_service.initialize("gcp-key.json")
+        # Initialize Firebase (only initializes once due to singleton pattern)
+        try:
+            firebase_service.initialize("gcp-key.json")
+        except Exception as firebase_init_error:
+            logger.error(f"Firebase initialization error: {firebase_init_error}")
+            # If already initialized, this is fine - continue
+            if "The default Firebase app already exists" not in str(firebase_init_error):
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail=f"Firebase initialization failed: {str(firebase_init_error)}"
+                )
 
         # Get race details
         race = db.query(Race).filter(Race.id == UUID(request.race_id)).first()
@@ -186,6 +195,7 @@ async def send_race_notification(
             )
 
         # Send to all_races topic (FREE!)
+        logger.info(f"Sending notification to topic 'all_races' for race: {race.name}")
         result = firebase_service.send_to_topic(
             topic="all_races",
             title=title,
@@ -201,6 +211,7 @@ async def send_race_notification(
         )
 
         if result:
+            logger.info(f"Notification sent successfully for race: {race.name}")
             return {
                 "status": "success",
                 "message": f"Notification sent to all_races topic",
@@ -208,9 +219,10 @@ async def send_race_notification(
                 "notification_type": request.notification_type
             }
         else:
+            logger.error(f"Firebase send_to_topic returned False for race: {race.name}")
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Failed to send notification"
+                detail="Failed to send notification. Check server logs for details."
             )
 
     except HTTPException:

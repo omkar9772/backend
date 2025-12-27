@@ -30,7 +30,7 @@ class FirebaseService:
             credentials_path: Path to Firebase service account JSON file
         """
         if self._initialized:
-            logger.info("Firebase Admin SDK already initialized")
+            logger.debug("Firebase Admin SDK already initialized")
             return
 
         try:
@@ -45,6 +45,14 @@ class FirebaseService:
                 logger.info("✅ Firebase Admin SDK initialized with default credentials")
 
             self._initialized = True
+        except ValueError as ve:
+            # Firebase already initialized (happens on app reload)
+            if "The default Firebase app already exists" in str(ve):
+                logger.warning("⚠️ Firebase Admin SDK already initialized globally")
+                self._initialized = True
+            else:
+                logger.error(f"❌ ValueError initializing Firebase Admin SDK: {ve}")
+                raise
         except Exception as e:
             logger.error(f"❌ Error initializing Firebase Admin SDK: {e}")
             raise
