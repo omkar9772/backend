@@ -10,8 +10,11 @@ import logging
 from app.db.base import get_db
 from app.models.device_token import DeviceToken
 from app.schemas.device_token import DeviceTokenCreate, DeviceTokenResponse, DeviceTokenDelete
+from app.schemas.notification import SendRaceNotificationRequest, SendRaceNotificationResponse
 from app.core.auth import get_current_user_optional
+from app.core.dependencies import get_current_active_admin
 from app.models.user import User
+from app.models.admin import AdminUser
 
 logger = logging.getLogger(__name__)
 
@@ -140,11 +143,11 @@ async def get_my_devices(
     return tokens
 
 
-@router.post("/send-race-notification", status_code=status.HTTP_200_OK)
+@router.post("/send-race-notification", response_model=SendRaceNotificationResponse, status_code=status.HTTP_200_OK)
 async def send_race_notification(
-    race_id: str,
-    notification_type: str,  # "one_day_before" or "race_day"
-    db: Session = Depends(get_db)
+    request: SendRaceNotificationRequest,
+    db: Session = Depends(get_db),
+    current_admin: AdminUser = Depends(get_current_active_admin)
 ):
     """
     Send notification for a specific race to all subscribed users
@@ -162,7 +165,7 @@ async def send_race_notification(
         firebase_service.initialize("gcp-key.json")
 
         # Get race details
-        race = db.query(Race).filter(Race.id == UUID(race_id)).first()
+        race = db.query(Race).filter(Race.id == UUID(request.race_id)).first()
         if not race:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -170,10 +173,10 @@ async def send_race_notification(
             )
 
         # Prepare notification based on type
-        if notification_type == "one_day_before":
+        if request.notification_type == "one_day_before":
             title = "🏁 Race Tomorrow!"
             body = f"{race.name} starts tomorrow at {race.address}"
-        elif notification_type == "race_day":
+        elif request.notification_type == "race_day":
             title = "🏁 Race Today!"
             body = f"{race.name} is happening today at {race.address}. Good luck!"
         else:
@@ -189,7 +192,7 @@ async def send_race_notification(
             body=body,
             data={
                 "type": "race_reminder",
-                "notification_type": notification_type,
+                "notification_type": request.notification_type,
                 "race_id": str(race.id),
                 "race_name": race.name,
                 "race_date": str(race.start_date),
@@ -202,7 +205,7 @@ async def send_race_notification(
                 "status": "success",
                 "message": f"Notification sent to all_races topic",
                 "race": race.name,
-                "notification_type": notification_type
+                "notification_type": request.notification_type
             }
         else:
             raise HTTPException(
