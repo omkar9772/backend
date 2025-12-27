@@ -8,7 +8,7 @@ CREATE TABLE IF NOT EXISTS device_tokens (
     updated_at TIMESTAMP DEFAULT NOW() NOT NULL
 );
 
---  Create indexes
+-- Create indexes
 CREATE INDEX IF NOT EXISTS ix_device_tokens_device_token ON device_tokens(device_token);
 CREATE INDEX IF NOT EXISTS ix_device_tokens_user_id ON device_tokens(user_id);
 CREATE INDEX IF NOT EXISTS ix_device_tokens_created_at ON device_tokens(created_at);
