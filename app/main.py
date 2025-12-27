@@ -24,6 +24,18 @@ app = FastAPI(
     redoc_url="/redoc",
 )
 
+@app.on_event("startup")
+async def startup_event():
+    """Initialize services on startup"""
+    from app.services.firebase_service import firebase_service
+
+    try:
+        # Initialize Firebase Admin SDK
+        firebase_service.initialize("gcp-key.json")
+        logger.info("✅ Firebase Admin SDK initialized at startup")
+    except Exception as e:
+        logger.warning(f"⚠️ Firebase initialization warning (may already be initialized): {e}")
+
 # CORS middleware
 app.add_middleware(
     CORSMiddleware,

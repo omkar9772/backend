@@ -33,7 +33,10 @@ async def register_device_token(
     - **device_token**: FCM device token
     - **platform**: Device platform (android, ios, web)
     - User can be anonymous (not logged in) or authenticated
+    - Automatically subscribes device to 'all_races' topic
     """
+    from app.services.firebase_service import firebase_service
+
     try:
         # Check if token already exists
         existing_token = db.query(DeviceToken).filter(
@@ -47,6 +50,13 @@ async def register_device_token(
                 db.commit()
                 db.refresh(existing_token)
                 logger.info(f"Updated device token {token_data.device_token[:10]}... with user_id: {current_user.id}")
+
+            # Subscribe to 'all_races' topic (idempotent - safe to call multiple times)
+            try:
+                result = firebase_service.subscribe_to_topic([token_data.device_token], "all_races")
+                logger.info(f"✅ Subscribed existing token to 'all_races' topic: {result}")
+            except Exception as topic_error:
+                logger.warning(f"⚠️ Failed to subscribe to topic (non-critical): {topic_error}")
 
             return existing_token
 
@@ -62,6 +72,13 @@ async def register_device_token(
         db.refresh(new_token)
 
         logger.info(f"✅ Registered new device token for platform: {token_data.platform}, user_id: {current_user.id if current_user else 'anonymous'}")
+
+        # Subscribe to 'all_races' topic automatically
+        try:
+            result = firebase_service.subscribe_to_topic([token_data.device_token], "all_races")
+            logger.info(f"✅ Subscribed new token to 'all_races' topic: {result}")
+        except Exception as topic_error:
+            logger.warning(f"⚠️ Failed to subscribe to topic (non-critical): {topic_error}")
 
         return new_token
 
